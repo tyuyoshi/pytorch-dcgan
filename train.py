@@ -9,8 +9,6 @@ import torch.nn as nn
 from net import Discriminator, Generator
 from tensorboardX import SummaryWriter
 import os
-from numpy.random import normal
-import numpy as np
 
 #================================options========================================
 parser = argparse.ArgumentParser(description='tuning hyparameter')
@@ -68,29 +66,19 @@ def loss_gen(z):
     loss = torch.sum(criterion(z[:,0],label.to(device)))
     return loss
 
-# sometimes exchange label to increase the quality of training
 def loss_dis_L1(x):
     batch_size = x.size()[0]
-    low_possibility = randint(10000)
-    label = 0.5
-    if low_possibility == 0:
-        label = torch.zeros(batch_size)
-    else:
-        label = torch.ones(batch_size)
+    label = torch.ones(batch_size)
     # print('label_L1 : {}'.format(label))
     L1 = torch.sum(criterion(x[:,0],label.to(device)))
     return L1
 
 def loss_dis_L2(z):
     batch_size = z.size()[0]
-    low_possibility = randint(10000)
-    label = 0.5
-    if low_possibility == 0:
-        label = torch.ones(batch_size)
-    else:
-        label = torch.zeros(batch_size)
+    label = torch.zeros(batch_size)
     # print('label_L2 : {}'.format(label))
-    L2 = torch.sum(crit
+    L2 = torch.sum(criterion(z[:,0],label.to(device)))
+    return L2
 
 
 #================================optimizer======================================
@@ -107,8 +95,8 @@ dis.apply(weights_init)
 gen = Generator(batch_size).to(device)
 gen.apply(weights_init)
 
-dis_opt = optim.Adam(dis.parameters(),lr=0.0002,betas=(0.5,0.999))
-gen_opt = optim.Adam(gen.parameters(),lr=0.0002,betas=(0.5,0.999))
+dis_opt = optim.Adam(dis.parameters(),lr=0.0001,betas=(0.5,0.999))
+gen_opt = optim.Adam(gen.parameters(),lr=0.0001,betas=(0.5,0.999))
 print("setted model/loss/optimizer")
 
 
