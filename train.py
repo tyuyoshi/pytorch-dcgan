@@ -14,10 +14,10 @@ import os
 parser = argparse.ArgumentParser(description='tuning hyparameter')
 parser.add_argument('--data_dir', '-d', default='./datasets/')
 parser.add_argument('--out_dir', '-o', default='./result/')
-parser.add_argument('--epoch', '-e', type=int, default=10000)
-parser.add_argument('--batch_size', '-b', type=int, default=64)
+parser.add_argument('--epoch', '-e', type=int, default=1000)
+parser.add_argument('--batch_size', '-b', type=int, default=16)
 parser.add_argument('--log_iter', '-l', type=int, default=10)
-parser.add_argument('--snapshot_epoch', '-s', type=int, default=100)
+parser.add_argument('--snapshot_epoch', '-s', type=int, default=10)
 parser.add_argument('--display_epoch', '-i', type=int, default=1)
 args = parser.parse_args()
 
@@ -66,17 +66,15 @@ def loss_gen(z):
     loss = torch.sum(criterion(z[:,0],label.to(device)))
     return loss
 
-def loss_dis_L1(x):
+def loss_dis_L1(x, iteration):
     batch_size = x.size()[0]
     label = torch.ones(batch_size)
-    # print('label_L1 : {}'.format(label))
     L1 = torch.sum(criterion(x[:,0],label.to(device)))
     return L1
 
-def loss_dis_L2(z):
+def loss_dis_L2(z, iteration):
     batch_size = z.size()[0]
     label = torch.zeros(batch_size)
-    # print('label_L2 : {}'.format(label))
     L2 = torch.sum(criterion(z[:,0],label.to(device)))
     return L2
 
@@ -95,8 +93,8 @@ dis.apply(weights_init)
 gen = Generator(batch_size).to(device)
 gen.apply(weights_init)
 
-dis_opt = optim.Adam(dis.parameters(),lr=0.0001,betas=(0.5,0.999))
-gen_opt = optim.Adam(gen.parameters(),lr=0.0001,betas=(0.5,0.999))
+dis_opt = optim.Adam(dis.parameters(),lr=0.0002,betas=(0.5,0.999))
+gen_opt = optim.Adam(gen.parameters(),lr=0.0002,betas=(0.5,0.999))
 print("setted model/loss/optimizer")
 
 
@@ -121,15 +119,16 @@ for epo in range(epoch):
         #train with inputs
         dis_opt.zero_grad()
         x = dis(inputs,epo)
-        L1 = loss_dis_L1(x)
+        L1 = loss_dis_L1(x,iteration_sum + 1)
         L1.backward()
 
         #train with fake
         z = gen(epo)
         z_out_1 = dis(z.detach(),epo)
-        L2 = loss_dis_L2(z_out_1)
+        L2 = loss_dis_L2(z_out_1,iteration_sum + 1)
         L2.backward()
-        dis_opt.step()
+        if L1 + L2 >= 0.1:
+            dis_opt.step()
 
         writer.add_scalar('dis_loss', L1+L2, iteration_sum + i)
 
@@ -138,7 +137,8 @@ for epo in range(epoch):
         z_out_2 = dis(z,epo)
         gen_loss = loss_gen(z_out_2)
         gen_loss.backward()
-        gen_opt.step()
+        if gen_loss >= 0.1:
+            gen_opt.step()
 
         writer.add_scalar('gen_loss', gen_loss, iteration_sum + i)
         writer.add_scalars('loss',{'dis' : L1+L2,
@@ -148,8 +148,11 @@ for epo in range(epoch):
         running_loss_dis += L1.item() + L2.item()
         running_loss_gen += gen_loss.item()
         if (iteration_sum + i) % log_iter == 0:
-            print('epoch : {0}, iter : {1}, dis_loss : {2}, gen_loss : {3}'.format(epo, iteration_sum + i,
-                            round(running_loss_dis / log_iter, 3), round(running_loss_gen / log_iter, 3)))
+            print('epoch : {0}, iter : {1}, dis_loss : {2}(L1 : {3}, L2 : {4}), gen_loss : {5}'.format(epo, iteration_sum + i,
+                            round(running_loss_dis / log_iter, 3),
+                            round(L1.item(), 3),
+                            round(L2.item(), 3),
+                            round(running_loss_gen / log_iter, 3)))
             running_loss_dis = 0.0
             running_loss_gen = 0.0
     iteration_sum += iterations
